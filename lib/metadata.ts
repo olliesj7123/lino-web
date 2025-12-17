@@ -30,7 +30,7 @@ function parseAttributes(tag: string) {
 
 function firstNonEmpty(...values: Array<string | null | undefined>) {
   for (const v of values) {
-    const trimmed = v?.trim()
+    const trimmed = v?.trim().replace(/\s+/g, ' ')
     if (trimmed) return trimmed
   }
   return null
@@ -38,10 +38,11 @@ function firstNonEmpty(...values: Array<string | null | undefined>) {
 
 function absolutize(baseUrl: string, maybeRelative: string | null) {
   if (!maybeRelative) return null
+  const normalized = maybeRelative.replace(/\s+/g, '')
   try {
-    return new URL(maybeRelative, baseUrl).toString()
+    return new URL(normalized, baseUrl).toString()
   } catch {
-    return maybeRelative
+    return normalized
   }
 }
 

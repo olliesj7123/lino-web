@@ -1,7 +1,12 @@
 import { NextResponse } from 'next/server'
 
-import { classifyContentType, classifySourceKey } from '@/lib/classify'
+import {
+  classifyContentType,
+  classifyContentTypeFromHtml,
+  classifySourceKey,
+} from '@/lib/classify'
 import { extractMetadata } from '@/lib/metadata'
+import { fetchTikTokOEmbed } from '@/lib/oembed'
 import { getDomain, normalizeUrl } from '@/lib/url'
 import { createClient } from '@/utils/supabase/server'
 
@@ -34,7 +39,7 @@ export async function POST(request: Request) {
 
   const domain = getDomain(normalized)
   const sourceKey = classifySourceKey(normalized)
-  const contentType = classifyContentType(normalized)
+  let contentType = classifyContentType(normalized)
 
   let fetchStatus: 'success' | 'failed' = 'failed'
   let fetchedAt: string | null = null
@@ -72,11 +77,28 @@ export async function POST(request: Request) {
     } else {
       const html = await res.text()
       meta = extractMetadata(html, normalized)
+      contentType = classifyContentTypeFromHtml(html, normalized)
       fetchStatus = 'success'
     }
   } catch (e) {
     fetchedAt = new Date().toISOString()
     fetchError = e instanceof Error ? e.message : '가져오기에 실패했어요'
+  }
+
+  if (domain === 'tiktok.com' && fetchStatus === 'success') {
+    const isMetaEmpty = !meta.title && !meta.description && !meta.image_url
+    if (isMetaEmpty) {
+      const oembed = await fetchTikTokOEmbed(normalized)
+      if (oembed) {
+        meta = {
+          ...meta,
+          title: meta.title ?? oembed.title,
+          image_url: meta.image_url ?? oembed.thumbnail_url,
+          site_name: meta.site_name ?? oembed.provider_name,
+          author: meta.author ?? oembed.author_name,
+        }
+      }
+    }
   }
 
   return NextResponse.json({
