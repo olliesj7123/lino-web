@@ -35,6 +35,8 @@ export default function AppBottomNav({ active }: Props) {
   const [previewLoading, setPreviewLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [preview, setPreview] = useState<Preview | null>(null)
+  const [pasteOpen, setPasteOpen] = useState(false)
+  const [pasteInput, setPasteInput] = useState('')
 
   const looksLikeUrl = useCallback((value: string) => {
     const v = value.trim()
@@ -105,6 +107,43 @@ export default function AppBottomNav({ active }: Props) {
     [toast]
   )
 
+  const readClipboardText = useCallback(async (): Promise<string | null> => {
+    try {
+      const t = (await navigator.clipboard.readText())?.trim()
+      if (t) return t
+    } catch {
+      // ignore and fallback
+    }
+
+    try {
+      if (!('read' in navigator.clipboard)) return null
+      const items = await navigator.clipboard.read()
+      for (const item of items) {
+        const preferred = ['text/uri-list', 'text/plain']
+        const type = preferred.find((t) => item.types.includes(t))
+        if (!type) continue
+        const blob = await item.getType(type)
+        const raw = (await blob.text()).trim()
+        if (!raw) continue
+
+        if (type === 'text/uri-list') {
+          const line = raw
+            .split(/\r?\n/)
+            .map((l) => l.trim())
+            .find((l) => l && !l.startsWith('#'))
+          if (line) return line
+          continue
+        }
+
+        return raw
+      }
+    } catch {
+      // ignore
+    }
+
+    return null
+  }, [])
+
   useEffect(() => {
     if (previewOpen || previewLoading || saving) return
     if (typeof window === 'undefined') return
@@ -117,7 +156,8 @@ export default function AppBottomNav({ active }: Props) {
 
     void (async () => {
       try {
-        const raw = (await navigator.clipboard.readText()).trim()
+        const raw = await readClipboardText()
+        if (!raw) return
         const extracted = extractUrlFromText(raw)
         if (!extracted) return
 
@@ -134,26 +174,20 @@ export default function AppBottomNav({ active }: Props) {
     previewOpen,
     previewLoading,
     saving,
+    readClipboardText,
     extractUrlFromText,
     openPreviewFromUrl,
   ])
 
   const openPreviewFromClipboard = async () => {
-    let text = ''
-    try {
-      text = (await navigator.clipboard.readText()).trim()
-    } catch {
-      toast({
-        title:
-          '클립보드에서 링크를 읽을 수 없어요. 링크를 복사한 뒤 다시 시도해 주세요.',
-      })
-      return
-    }
-
+    const text = await readClipboardText()
     if (!text) {
       toast({
-        title: '클립보드에 링크가 없어요. 링크를 복사한 뒤 다시 눌러주세요.',
+        title: '모바일에서는 클립보드를 자동으로 읽지 못할 수 있어요',
+        description: '아래에 링크를 붙여넣어 주세요.',
       })
+      setPasteInput('')
+      setPasteOpen(true)
       return
     }
 
@@ -161,12 +195,27 @@ export default function AppBottomNav({ active }: Props) {
     if (!extracted) {
       toast({
         title: '클립보드에서 링크를 찾지 못했어요',
-        description:
-          'http/https로 시작하는 링크를 복사한 뒤 다시 시도해 주세요.',
+        description: '아래에 링크를 붙여넣어 주세요.',
+      })
+      setPasteInput(text)
+      setPasteOpen(true)
+      return
+    }
+
+    await openPreviewFromUrl(extracted)
+  }
+
+  const confirmPaste = async () => {
+    const extracted = extractUrlFromText(pasteInput)
+    if (!extracted) {
+      toast({
+        title: '링크를 찾지 못했어요',
+        description: 'http/https로 시작하는 링크를 붙여넣어 주세요.',
       })
       return
     }
 
+    setPasteOpen(false)
     await openPreviewFromUrl(extracted)
   }
 
@@ -214,6 +263,54 @@ export default function AppBottomNav({ active }: Props) {
 
   return (
     <>
+      {pasteOpen ? (
+        <div
+          className="fixed inset-0 z-40 flex items-end justify-center bg-black/40 px-4 pb-24"
+          onClick={() => {
+            setPasteOpen(false)
+          }}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl bg-white p-4 shadow-lg dark:bg-zinc-950"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="text-base font-semibold text-zinc-900 dark:text-zinc-50">
+              링크를 붙여넣어 주세요
+            </div>
+            <div className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+              모바일에서는 보안 정책 때문에 클립보드 자동 읽기가 제한될 수
+              있어요.
+            </div>
+
+            <textarea
+              value={pasteInput}
+              onChange={(e) => setPasteInput(e.target.value)}
+              placeholder="https://..."
+              className="mt-4 h-24 w-full resize-none rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none focus:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-50"
+              autoFocus
+            />
+
+            <div className="mt-4 flex gap-2">
+              <button
+                type="button"
+                onClick={() => setPasteOpen(false)}
+                className="h-11 flex-1 rounded-xl border border-zinc-200 bg-white text-sm font-medium text-zinc-900 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-50"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={() => void confirmPaste()}
+                disabled={previewLoading || saving}
+                className="h-11 flex-1 rounded-xl bg-zinc-900 text-sm font-medium text-white disabled:opacity-60 dark:bg-zinc-50 dark:text-zinc-900"
+              >
+                {previewLoading ? '불러오는 중...' : '확인'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {previewOpen && preview ? (
         <div
           className="fixed inset-0 z-30 flex items-end justify-center bg-black/40 px-4 pb-24"
