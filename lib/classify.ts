@@ -1,7 +1,7 @@
 import { getDomain } from '@/lib/url'
 
 export type SourceKey = string
-export type ContentType = 'article' | 'video' | 'report' | 'unknown'
+export type ContentType = 'article' | 'video' | 'report' | 'site' | 'unknown'
 
 export function classifySourceKey(url: string): SourceKey {
   const domain = getDomain(url)
@@ -41,9 +41,13 @@ export function classifyContentType(url: string): ContentType {
     return 'report'
   }
 
-  if (pathname) {
+  if (domain === 'medium.com' || domain.endsWith('.medium.com')) {
     return 'article'
   }
 
-  return 'unknown'
+  if (domain === 'yozm.wishket.com') {
+    return 'article'
+  }
+
+  return 'site'
 }

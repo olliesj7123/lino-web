@@ -1,10 +1,10 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
-import Link from 'next/link'
-import { Share2, Trash2 } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Copy, Share2, Trash2 } from 'lucide-react'
 
 import type { Item } from '@/lib/items'
+import { useToast } from '@/app/_components/ToastProvider'
 
 type Props = {
   initialItems: Item[]
@@ -15,15 +15,13 @@ export default function InboxClient({
   initialItems,
   initialTotalCount,
 }: Props) {
+  const { toast } = useToast()
   const [error, setError] = useState<string | null>(null)
   const [items, setItems] = useState<Item[]>(initialItems)
   const [totalCount, setTotalCount] = useState<number>(initialTotalCount)
-  const [typeFilter, setTypeFilter] = useState<'all' | 'video' | 'article'>(
-    'all'
-  )
-
-  const [toastMessage, setToastMessage] = useState<string | null>(null)
-  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [typeFilter, setTypeFilter] = useState<
+    'all' | 'video' | 'article' | 'site'
+  >('all')
 
   const [menuOpenForId, setMenuOpenForId] = useState<string | null>(null)
 
@@ -40,6 +38,7 @@ export default function InboxClient({
     if (type === 'article') return '아티클'
     if (type === 'video') return '영상'
     if (type === 'report') return '리포트'
+    if (type === 'site') return '사이트'
     return '기타'
   }
 
@@ -140,10 +139,34 @@ export default function InboxClient({
     }
   }, [maxItems])
 
+  const copyLink = async (url: string) => {
+    try {
+      await navigator.clipboard.writeText(url)
+      toast({ title: '링크를 복사했어요' })
+    } catch {
+      toast({
+        title: '링크를 복사할 수 없어요',
+        description: url,
+        actionLabel: '열기',
+        onAction: () => {
+          window.open(url, '_blank', 'noopener,noreferrer')
+        },
+        durationMs: 5000,
+      })
+    }
+  }
+
+  const onCopyLink = async (item: Item) => {
+    setMenuOpenForId(null)
+
+    const url = item.canonical_url ?? item.url
+    await copyLink(url)
+  }
+
   const onShare = async (item: Item) => {
     setMenuOpenForId(null)
 
-    const url = item.url
+    const url = item.canonical_url ?? item.url
     const title = item.title ?? undefined
     const text = item.description ?? undefined
 
@@ -152,22 +175,18 @@ export default function InboxClient({
         await navigator.share({ title, text, url })
         return
       }
+      toast({
+        title: '이 환경에서는 공유를 지원하지 않아요',
+        actionLabel: '복사',
+        onAction: () => copyLink(url),
+      })
+      return
     } catch {
-      // fallthrough to clipboard
-    }
-
-    try {
-      await navigator.clipboard.writeText(url)
-      if (toastTimerRef.current) {
-        clearTimeout(toastTimerRef.current)
-      }
-      setToastMessage('링크를 복사했어요')
-      toastTimerRef.current = setTimeout(() => {
-        setToastMessage(null)
-        toastTimerRef.current = null
-      }, 2000)
-    } catch {
-      window.prompt('아래 링크를 복사해 주세요.', url)
+      toast({
+        title: '공유에 실패했어요',
+        actionLabel: '복사',
+        onAction: () => copyLink(url),
+      })
     }
   }
 
@@ -216,12 +235,24 @@ export default function InboxClient({
           >
             아티클
           </button>
+
+          <button
+            type="button"
+            onClick={() => setTypeFilter('site')}
+            className={`h-9 rounded-full border px-3 text-sm font-medium ${
+              typeFilter === 'site'
+                ? 'border-zinc-900 bg-zinc-900 text-white dark:border-zinc-50 dark:bg-zinc-50 dark:text-zinc-900'
+                : 'border-zinc-200 bg-white text-zinc-900 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-50'
+            }`}
+          >
+            사이트
+          </button>
         </div>
       </div>
 
       <div className="space-y-3">
         {filteredItems.map((item) => {
-          const href = `/items/${item.id}`
+          const openUrl = item.canonical_url ?? item.url
           const title = item.title ?? item.url
           const source = item.source_key ?? item.domain ?? ''
           const type = item.content_type ?? 'unknown'
@@ -229,6 +260,17 @@ export default function InboxClient({
           return (
             <div
               key={item.id}
+              role="link"
+              tabIndex={0}
+              onClick={() => {
+                window.open(openUrl, '_blank', 'noopener,noreferrer')
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  window.open(openUrl, '_blank', 'noopener,noreferrer')
+                }
+              }}
               className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950"
             >
               <div className="flex gap-3">
@@ -244,12 +286,15 @@ export default function InboxClient({
                 )}
 
                 <div className="min-w-0 flex-1">
-                  <Link
-                    href={href}
+                  <a
+                    href={openUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
                     className="block truncate text-sm font-medium text-zinc-900 dark:text-zinc-50"
                   >
                     {title}
-                  </Link>
+                  </a>
 
                   <div className="mt-1 flex flex-wrap gap-2">
                     {source ? (
@@ -267,11 +312,12 @@ export default function InboxClient({
                   <button
                     type="button"
                     aria-label="메뉴"
-                    onClick={() =>
+                    onClick={(e) => {
+                      e.stopPropagation()
                       setMenuOpenForId((cur) =>
                         cur === item.id ? null : item.id
                       )
-                    }
+                    }}
                     className="h-9 w-9 rounded-xl border border-zinc-200 bg-white text-sm font-medium text-zinc-900 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-50"
                   >
                     ⋮
@@ -281,7 +327,10 @@ export default function InboxClient({
                     <div className="absolute right-0 top-10 z-10 w-40 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
                       <button
                         type="button"
-                        onClick={() => void onShare(item)}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          void onShare(item)
+                        }}
                         className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-zinc-900 hover:bg-zinc-50 dark:text-zinc-50 dark:hover:bg-zinc-900"
                       >
                         <Share2 className="h-4 w-4" />
@@ -290,7 +339,22 @@ export default function InboxClient({
 
                       <button
                         type="button"
-                        onClick={() => void requestDeleteWithUndo(item)}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          void onCopyLink(item)
+                        }}
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-zinc-900 hover:bg-zinc-50 dark:text-zinc-50 dark:hover:bg-zinc-900"
+                      >
+                        <Copy className="h-4 w-4" />
+                        링크 복사
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          void requestDeleteWithUndo(item)
+                        }}
                         className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 hover:bg-zinc-50 dark:text-red-400 dark:hover:bg-zinc-900"
                       >
                         <Trash2 className="h-4 w-4" />
@@ -329,21 +393,6 @@ export default function InboxClient({
                 되돌리기
               </button>
             </div>
-          </div>
-        </div>
-      ) : null}
-
-      {toastMessage ? (
-        <div
-          className="fixed left-0 right-0 z-30 px-4"
-          style={{
-            bottom: pendingDelete
-              ? 'calc(env(safe-area-inset-bottom) + 136px)'
-              : 'calc(env(safe-area-inset-bottom) + 72px)',
-          }}
-        >
-          <div className="mx-auto max-w-md rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-900 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-50">
-            {toastMessage}
           </div>
         </div>
       ) : null}

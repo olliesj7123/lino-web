@@ -1,11 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Inbox, PlusCircle, User } from 'lucide-react'
 
 import type { Item } from '@/lib/items'
+import { useToast } from '@/app/_components/ToastProvider'
 
 type Preview = {
   url: string
@@ -29,12 +30,13 @@ type Props = {
 
 export default function AppBottomNav({ active }: Props) {
   const router = useRouter()
+  const { toast } = useToast()
   const [previewOpen, setPreviewOpen] = useState(false)
   const [previewLoading, setPreviewLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [preview, setPreview] = useState<Preview | null>(null)
 
-  const looksLikeUrl = (value: string) => {
+  const looksLikeUrl = useCallback((value: string) => {
     const v = value.trim()
     if (!v) return false
     try {
@@ -45,56 +47,127 @@ export default function AppBottomNav({ active }: Props) {
     } catch {
       return false
     }
-  }
+  }, [])
+
+  const extractUrlFromText = useCallback(
+    (input: string) => {
+      const text = input.trim()
+      if (!text) return null
+
+      const hasWhitespace = /\s/.test(text)
+      if (hasWhitespace) {
+        const match = text.match(/https?:\/\/[^\s<>()"']+/i)
+        if (!match?.[0]) return null
+        return match[0].replace(/[),\].!?;:]+$/, '')
+      }
+
+      if (looksLikeUrl(text)) {
+        return text.startsWith('http://') || text.startsWith('https://')
+          ? text
+          : `https://${text}`
+      }
+
+      return null
+    },
+    [looksLikeUrl]
+  )
+
+  const openPreviewFromUrl = useCallback(
+    async (url: string, opts?: { silent?: boolean }) => {
+      const silent = opts?.silent ?? false
+
+      setPreviewLoading(true)
+      try {
+        const res = await fetch('/api/preview', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ url }),
+        })
+
+        const payload = (await res.json().catch(() => null)) as {
+          preview?: Preview
+          error?: string
+        } | null
+
+        if (!res.ok || !payload?.preview) {
+          if (!silent) {
+            toast({ title: payload?.error ?? '미리보기를 불러오지 못했어요' })
+          }
+          return
+        }
+
+        setPreview(payload.preview)
+        setPreviewOpen(true)
+      } finally {
+        setPreviewLoading(false)
+      }
+    },
+    [toast]
+  )
+
+  useEffect(() => {
+    if (previewOpen || previewLoading || saving) return
+    if (typeof window === 'undefined') return
+
+    const checkedKey = 'lino:clipboard_auto_checked'
+    const lastUrlKey = 'lino:clipboard_auto_last_url'
+
+    if (sessionStorage.getItem(checkedKey) === '1') return
+    sessionStorage.setItem(checkedKey, '1')
+
+    void (async () => {
+      try {
+        const raw = (await navigator.clipboard.readText()).trim()
+        const extracted = extractUrlFromText(raw)
+        if (!extracted) return
+
+        const last = sessionStorage.getItem(lastUrlKey)
+        if (last && last === extracted) return
+        sessionStorage.setItem(lastUrlKey, extracted)
+
+        await openPreviewFromUrl(extracted, { silent: true })
+      } catch {
+        // silently ignore (clipboard access can be blocked without user gesture)
+      }
+    })()
+  }, [
+    previewOpen,
+    previewLoading,
+    saving,
+    extractUrlFromText,
+    openPreviewFromUrl,
+  ])
 
   const openPreviewFromClipboard = async () => {
     let text = ''
     try {
       text = (await navigator.clipboard.readText()).trim()
     } catch {
-      window.alert(
-        '클립보드에서 링크를 읽을 수 없어요. 링크를 복사한 뒤 다시 시도해 주세요.'
-      )
+      toast({
+        title:
+          '클립보드에서 링크를 읽을 수 없어요. 링크를 복사한 뒤 다시 시도해 주세요.',
+      })
       return
     }
 
     if (!text) {
-      window.alert(
-        '클립보드에 링크가 없어요. 링크를 복사한 뒤 다시 눌러주세요.'
-      )
-      return
-    }
-
-    if (!looksLikeUrl(text)) {
-      window.alert(
-        '클립보드 내용이 링크처럼 보이지 않아요. 링크를 복사해 주세요.'
-      )
-      return
-    }
-
-    setPreviewLoading(true)
-    try {
-      const res = await fetch('/api/preview', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ url: text }),
+      toast({
+        title: '클립보드에 링크가 없어요. 링크를 복사한 뒤 다시 눌러주세요.',
       })
-
-      const payload = (await res.json().catch(() => null)) as {
-        preview?: Preview
-        error?: string
-      } | null
-
-      if (!res.ok || !payload?.preview) {
-        window.alert(payload?.error ?? '미리보기를 불러오지 못했어요')
-        return
-      }
-
-      setPreview(payload.preview)
-      setPreviewOpen(true)
-    } finally {
-      setPreviewLoading(false)
+      return
     }
+
+    const extracted = extractUrlFromText(text)
+    if (!extracted) {
+      toast({
+        title: '클립보드에서 링크를 찾지 못했어요',
+        description:
+          'http/https로 시작하는 링크를 복사한 뒤 다시 시도해 주세요.',
+      })
+      return
+    }
+
+    await openPreviewFromUrl(extracted)
   }
 
   const confirmSave = async () => {
@@ -114,7 +187,7 @@ export default function AppBottomNav({ active }: Props) {
       } | null
 
       if (!res.ok || !payload?.item) {
-        window.alert(payload?.error ?? '저장에 실패했어요')
+        toast({ title: payload?.error ?? '저장에 실패했어요' })
         return
       }
 
@@ -135,6 +208,7 @@ export default function AppBottomNav({ active }: Props) {
     if (type === 'article') return '아티클'
     if (type === 'video') return '영상'
     if (type === 'report') return '리포트'
+    if (type === 'site') return '사이트'
     return '기타'
   }
 
@@ -244,7 +318,50 @@ export default function AppBottomNav({ active }: Props) {
             aria-label="클립보드 링크 저장"
             className="-translate-y-4 rounded-full bg-zinc-900 p-3 text-white shadow-md disabled:opacity-60 dark:bg-zinc-50 dark:text-zinc-900"
           >
-            <PlusCircle className="h-8 w-8" />
+            {previewLoading ? (
+              <span
+                className="flex h-8 w-8 items-center justify-center"
+                aria-hidden
+              >
+                <span
+                  className="h-1.5 w-1.5 rounded-full bg-current"
+                  style={{
+                    animation: 'lino-dot 1s infinite',
+                    animationDelay: '0ms',
+                  }}
+                />
+                <span
+                  className="ml-1.5 h-1.5 w-1.5 rounded-full bg-current"
+                  style={{
+                    animation: 'lino-dot 1s infinite',
+                    animationDelay: '150ms',
+                  }}
+                />
+                <span
+                  className="ml-1.5 h-1.5 w-1.5 rounded-full bg-current"
+                  style={{
+                    animation: 'lino-dot 1s infinite',
+                    animationDelay: '300ms',
+                  }}
+                />
+                <style jsx>{`
+                  @keyframes lino-dot {
+                    0%,
+                    80%,
+                    100% {
+                      transform: translateY(0);
+                      opacity: 0.4;
+                    }
+                    40% {
+                      transform: translateY(-4px);
+                      opacity: 1;
+                    }
+                  }
+                `}</style>
+              </span>
+            ) : (
+              <PlusCircle className="h-8 w-8" />
+            )}
           </button>
 
           <Link
