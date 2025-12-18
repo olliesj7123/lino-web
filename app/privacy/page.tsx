@@ -41,7 +41,7 @@ export default async function PrivacyPage() {
           </div>
         </div>
 
-        <AppBottomNav active="settings" />
+        <AppBottomNav active="inbox" />
       </main>
     </div>
   )

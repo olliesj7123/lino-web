@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Copy, Share2, Trash2 } from 'lucide-react'
+import { Check, Copy, RotateCcw, Share2, Trash2 } from 'lucide-react'
 
 import type { Item } from '@/lib/items'
 import { useToast } from '@/app/_components/ToastProvider'
@@ -48,6 +48,40 @@ export default function InboxClient({
       : items.filter(
           (it) => (it.content_type ?? '').toLowerCase() === typeFilter
         )
+
+  const patchReadAt = async (item: Item, readAt: string | null) => {
+    const res = await fetch(`/api/items/${item.id}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ read_at: readAt }),
+    })
+
+    if (!res.ok) {
+      throw new Error('읽음 상태 변경에 실패했어요')
+    }
+  }
+
+  const toggleReadState = (item: Item) => {
+    setMenuOpenForId(null)
+    setError(null)
+
+    const nextReadAt = item.read_at ? null : new Date().toISOString()
+
+    setItems((prev) =>
+      prev.map((it) =>
+        it.id === item.id ? { ...it, read_at: nextReadAt } : it
+      )
+    )
+
+    void patchReadAt(item, nextReadAt).catch(() => {
+      setItems((prev) =>
+        prev.map((it) =>
+          it.id === item.id ? { ...it, read_at: item.read_at } : it
+        )
+      )
+      setError('읽음 상태 변경에 실패했어요')
+    })
+  }
 
   const commitDelete = async (item: Item, index: number) => {
     try {
@@ -256,6 +290,7 @@ export default function InboxClient({
           const title = item.title ?? item.url
           const source = item.source_key ?? item.domain ?? ''
           const type = item.content_type ?? 'unknown'
+          const isRead = Boolean(item.read_at)
 
           return (
             <div
@@ -297,6 +332,15 @@ export default function InboxClient({
                   </a>
 
                   <div className="mt-1 flex flex-wrap gap-2">
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-xs ${
+                        isRead
+                          ? 'bg-zinc-100 text-zinc-600 dark:bg-zinc-900 dark:text-zinc-300'
+                          : 'bg-zinc-900 text-white dark:bg-zinc-50 dark:text-zinc-900'
+                      }`}
+                    >
+                      {isRead ? '읽음' : '안읽음'}
+                    </span>
                     {source ? (
                       <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
                         {source}
@@ -325,6 +369,22 @@ export default function InboxClient({
 
                   {menuOpenForId === item.id ? (
                     <div className="absolute right-0 top-10 z-10 w-40 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          toggleReadState(item)
+                        }}
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-zinc-900 hover:bg-zinc-50 dark:text-zinc-50 dark:hover:bg-zinc-900"
+                      >
+                        {isRead ? (
+                          <RotateCcw className="h-4 w-4" />
+                        ) : (
+                          <Check className="h-4 w-4" />
+                        )}
+                        {isRead ? '안읽음' : '읽음 처리'}
+                      </button>
+
                       <button
                         type="button"
                         onClick={(e) => {

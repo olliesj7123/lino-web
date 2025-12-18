@@ -37,7 +37,7 @@ export default async function TermsPage() {
           <div>서비스 운영상 필요 시 기능/정책이 변경될 수 있습니다.</div>
         </div>
 
-        <AppBottomNav active="settings" />
+        <AppBottomNav active="inbox" />
       </main>
     </div>
   )

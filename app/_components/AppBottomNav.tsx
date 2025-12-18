@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Inbox, PlusCircle, User } from 'lucide-react'
+import { CalendarDays, Inbox, PlusCircle } from 'lucide-react'
 
 import type { Item } from '@/lib/items'
 import { useToast } from '@/app/_components/ToastProvider'
@@ -25,7 +25,7 @@ type Preview = {
 }
 
 type Props = {
-  active: 'inbox' | 'settings'
+  active: 'today' | 'inbox'
 }
 
 export default function AppBottomNav({ active }: Props) {
@@ -396,16 +396,16 @@ export default function AppBottomNav({ active }: Props) {
       >
         <div className="relative mx-auto flex max-w-md items-center justify-between px-4 py-2">
           <Link
-            href="/inbox"
+            href="/today"
             className={`flex w-20 flex-col items-center justify-center gap-1 rounded-xl py-2 text-xs font-medium ${
-              active === 'inbox'
+              active === 'today'
                 ? 'text-zinc-900 dark:text-zinc-50'
                 : 'text-zinc-500 dark:text-zinc-400'
             }`}
-            aria-label="인박스"
+            aria-label="오늘 볼 것"
           >
-            <Inbox className="h-5 w-5" />
-            인박스
+            <CalendarDays className="h-5 w-5" />
+            오늘 볼 것
           </Link>
 
           <button
@@ -462,16 +462,16 @@ export default function AppBottomNav({ active }: Props) {
           </button>
 
           <Link
-            href="/settings"
+            href="/inbox"
             className={`flex w-20 flex-col items-center justify-center gap-1 rounded-xl py-2 text-xs font-medium ${
-              active === 'settings'
+              active === 'inbox'
                 ? 'text-zinc-900 dark:text-zinc-50'
                 : 'text-zinc-500 dark:text-zinc-400'
             }`}
-            aria-label="설정"
+            aria-label="인박스"
           >
-            <User className="h-5 w-5" />
-            프로필
+            <Inbox className="h-5 w-5" />
+            인박스
           </Link>
         </div>
       </nav>

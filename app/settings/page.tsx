@@ -59,7 +59,7 @@ export default async function SettingsPage() {
           </div>
         </div>
 
-        <AppBottomNav active="settings" />
+        <AppBottomNav active="inbox" />
       </main>
     </div>
   )

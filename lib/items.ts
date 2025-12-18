@@ -21,5 +21,6 @@ export type Item = {
   fetched_at: string | null
   fetch_error: string | null
   last_opened_at: string | null
+  read_at: string | null
   created_at: string
 }

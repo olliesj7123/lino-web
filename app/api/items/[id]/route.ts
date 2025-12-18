@@ -71,10 +71,45 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  void request
-  void params
-  return NextResponse.json(
-    { error: 'MVP 1차에서는 상태 변경을 지원하지 않아요' },
-    { status: 400 }
-  )
+  const { id } = await params
+
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return NextResponse.json({ error: '로그인이 필요해요' }, { status: 401 })
+  }
+
+  const body = (await request.json().catch(() => null)) as {
+    read_at?: string | null
+  } | null
+
+  if (!body || !('read_at' in body)) {
+    return NextResponse.json(
+      { error: '올바른 요청이 아니에요' },
+      { status: 400 }
+    )
+  }
+
+  const readAt = body.read_at ?? null
+  const patch: Record<string, string | null> = { read_at: readAt }
+  if (readAt) {
+    patch.last_opened_at = new Date().toISOString()
+  }
+
+  const { data, error } = await supabase
+    .from('items')
+    .update(patch)
+    .eq('id', id)
+    .eq('user_id', user.id)
+    .select('*')
+    .single()
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+
+  return NextResponse.json({ item: data })
 }

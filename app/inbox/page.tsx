@@ -1,3 +1,6 @@
+import Link from 'next/link'
+import { User } from 'lucide-react'
+
 import { createClient } from '@/utils/supabase/server'
 
 import type { Item } from '@/lib/items'
@@ -31,9 +34,19 @@ export default async function InboxPage() {
     <div className="flex min-h-dvh justify-center bg-zinc-50 px-4 py-6 dark:bg-black">
       <main className="w-full max-w-md">
         <header className="mb-6">
-          <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
-            인박스
-          </h1>
+          <div className="flex items-center justify-between">
+            <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
+              인박스
+            </h1>
+
+            <Link
+              href="/settings"
+              aria-label="프로필"
+              className="flex h-10 w-10 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-900 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-50"
+            >
+              <User className="h-5 w-5" />
+            </Link>
+          </div>
         </header>
 
         <InboxClient
