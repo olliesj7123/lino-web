@@ -1,12 +1,53 @@
 'use client'
 
 import { useState } from 'react'
+import { Check } from 'lucide-react'
 
 import type { Item } from '@/lib/items'
 
 type Props = {
   initialItems: Item[]
   initialTotalCount: number
+}
+
+const dayDiffFromToday = (iso: string) => {
+  const created = new Date(iso)
+  const now = new Date()
+  const startOfToday = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate()
+  )
+  const startOfCreated = new Date(
+    created.getFullYear(),
+    created.getMonth(),
+    created.getDate()
+  )
+  const diffMs = startOfToday.getTime() - startOfCreated.getTime()
+  const days = Math.floor(diffMs / 86_400_000)
+  return Number.isFinite(days) ? Math.max(0, days) : 0
+}
+
+const savedLabelAndCopy = (createdAt: string) => {
+  const days = dayDiffFromToday(createdAt)
+
+  if (days === 0) {
+    return { label: '오늘 저장', copy: '지금 보기 좋아요' }
+  }
+
+  if (days === 1) {
+    return { label: '어제 저장', copy: '가볍게 읽기' }
+  }
+
+  if (days === 2) {
+    return { label: '2일 전 저장', copy: '다시 꺼내볼 타이밍' }
+  }
+
+  if (days >= 7) {
+    return { label: `${days}일 전 저장`, copy: '읽기 전에 한 번 더' }
+  }
+
+  return { label: `${days}일 전 저장`, copy: '다시 꺼내볼 타이밍' }
 }
 
 export default function TodayClient({
@@ -111,76 +152,102 @@ export default function TodayClient({
     setPendingRead(null)
   }
 
+  const groups = (() => {
+    const result: Array<{ key: string; title: string; items: Item[] }> = []
+    const indexByKey = new Map<string, number>()
+
+    for (const item of items) {
+      const info = savedLabelAndCopy(item.created_at)
+      const key = info.label
+      const idx = indexByKey.get(key)
+
+      if (idx === undefined) {
+        indexByKey.set(key, result.length)
+        result.push({ key, title: info.copy, items: [item] })
+      } else {
+        result[idx].items.push(item)
+      }
+    }
+
+    return result
+  })()
+
   return (
     <div className="space-y-4 pb-24">
-      {items.map((item) => {
-        const title = item.title ?? item.url
-        const source = item.source_key ?? ''
-        const domain =
-          item.domain ??
-          (() => {
-            try {
-              return new URL(item.canonical_url ?? item.url).hostname
-            } catch {
-              return ''
-            }
-          })()
-
-        return (
-          <div
-            key={item.id}
-            role="link"
-            tabIndex={0}
-            onClick={() => openOutlink(item)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault()
-                openOutlink(item)
-              }
-            }}
-            className="relative overflow-hidden rounded-2xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950"
-          >
-            <div className="relative">
-              <div className="aspect-4/3 w-full bg-zinc-100 dark:bg-zinc-900">
-                {item.image_url ? (
-                  <img
-                    src={item.image_url}
-                    alt=""
-                    className="h-full w-full object-cover"
-                    loading="lazy"
-                  />
-                ) : null}
-              </div>
-
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  requestReadWithUndo(item)
-                }}
-                className="absolute right-3 top-3 rounded-full bg-white/90 px-3 py-1 text-xs font-medium text-zinc-900 shadow-sm backdrop-blur hover:bg-white dark:bg-zinc-950/90 dark:text-zinc-50"
-              >
-                읽음
-              </button>
-
-              <div className="absolute inset-x-0 bottom-0 bg-zinc-900/85 p-4 text-white">
-                <div className="line-clamp-2 text-sm font-medium leading-5">
-                  {title}
-                </div>
-
-                <div className="mt-3 space-y-1 text-xs text-white/80">
-                  <div className="truncate">
-                    {source ? `출처: ${source}` : '출처: -'}
-                  </div>
-                  <div className="truncate">
-                    {domain ? `도메인: ${domain}` : '도메인: -'}
-                  </div>
-                </div>
-              </div>
-            </div>
+      {groups.map((group) => (
+        <section key={group.key} className="space-y-4">
+          <div className="px-1 text-sm font-medium text-zinc-700 dark:text-zinc-300">
+            {group.title}
           </div>
-        )
-      })}
+
+          <div className="space-y-4">
+            {group.items.map((item) => {
+              const title = item.title ?? item.url
+              const source = item.source_key ?? item.domain ?? ''
+              const savedInfo = savedLabelAndCopy(item.created_at)
+
+              return (
+                <div
+                  key={item.id}
+                  role="link"
+                  tabIndex={0}
+                  onClick={() => openOutlink(item)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      openOutlink(item)
+                    }
+                  }}
+                  className="relative overflow-hidden rounded-2xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950"
+                >
+                  <div className="relative">
+                    <div className="aspect-4/3 w-full bg-zinc-100 dark:bg-zinc-900">
+                      {item.image_url ? (
+                        <img
+                          src={item.image_url}
+                          alt=""
+                          className="h-full w-full object-cover"
+                          loading="lazy"
+                        />
+                      ) : null}
+                    </div>
+
+                    <span className="absolute left-3 top-3 inline-flex items-center rounded-full border border-white/15 bg-white/10 px-2 py-0.5 text-xs font-medium text-white/75 shadow-sm backdrop-blur">
+                      {savedInfo.label}
+                    </span>
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        requestReadWithUndo(item)
+                      }}
+                      className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-medium text-white/75 shadow-sm backdrop-blur hover:bg-white/15"
+                    >
+                      <Check className="h-3.5 w-3.5" />
+                      읽음처리
+                    </button>
+
+                    <div className="absolute inset-x-0 bottom-0 bg-zinc-900/85 p-4 text-white">
+                      <div className="line-clamp-2 text-sm font-medium leading-5">
+                        {title}
+                      </div>
+
+                      {source ? (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <span className="inline-flex items-center rounded-full bg-white/15 px-2 py-0.5 text-xs text-white/85">
+                            {source}
+                          </span>
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </section>
+      ))}
 
       {items.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-zinc-200 bg-white p-6 text-center text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-400">
