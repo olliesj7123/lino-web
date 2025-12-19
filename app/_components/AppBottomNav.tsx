@@ -405,95 +405,97 @@ export default function AppBottomNav({ active }: Props) {
       ) : null}
 
       <nav
-        className="fixed bottom-0 left-0 right-0 z-20 border-t border-zinc-200 bg-white/95 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95"
+        className="fixed bottom-0 left-0 right-0 z-20 border-t border-white/40 bg-white/70 backdrop-blur-xl dark:border-white/10 dark:bg-zinc-950/65"
         style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
         aria-label="하단 네비게이션"
       >
-        <div className="relative mx-auto flex max-w-md items-center justify-between px-4 py-2">
-          <Link
-            href="/today"
-            className={`flex w-20 flex-col items-center justify-center gap-1 rounded-xl py-2 text-xs font-medium ${
-              active === 'today'
-                ? 'text-zinc-900 dark:text-zinc-50'
-                : 'text-zinc-500 dark:text-zinc-400'
-            }`}
-            aria-label="안읽음"
-          >
-            <Bookmark className="h-5 w-5" />
-            안읽음
-          </Link>
+        <div className="relative mx-auto max-w-md px-6 pb-3 pt-2">
+          <div className="grid grid-cols-3 items-end">
+            <Link
+              href="/today"
+              aria-current={active === 'today' ? 'page' : undefined}
+              className={`flex flex-col items-center justify-center gap-1 rounded-xl py-2 text-[11px] font-medium transition-colors ${
+                active === 'today'
+                  ? 'text-zinc-900 dark:text-zinc-50'
+                  : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200'
+              }`}
+              aria-label="안읽음"
+            >
+              <Bookmark className="h-5 w-5" />
+              <span>안읽음</span>
+            </Link>
 
-          <Link
-            href="/inbox"
-            className={`flex w-20 flex-col items-center justify-center gap-1 rounded-xl py-2 text-xs font-medium ${
-              active === 'inbox'
-                ? 'text-zinc-900 dark:text-zinc-50'
-                : 'text-zinc-500 dark:text-zinc-400'
-            }`}
-            aria-label="읽음"
-          >
-            <BookmarkCheck className="h-5 w-5" />
-            읽음
-          </Link>
+            <div className="flex items-end justify-center">
+              <button
+                type="button"
+                onClick={() => void openPreviewFromClipboard()}
+                disabled={saving || previewLoading}
+                aria-label="클립보드 링크 저장"
+                className="relative -translate-y-3 inline-flex h-14 w-14 items-center justify-center rounded-full border border-white/45 bg-white/65 text-zinc-900 shadow-lg backdrop-blur-xl transition-colors disabled:opacity-60 dark:border-white/10 dark:bg-zinc-950/55 dark:text-zinc-50"
+              >
+                {previewLoading ? (
+                  <span
+                    className="flex h-7 w-7 items-center justify-center"
+                    aria-hidden
+                  >
+                    <span
+                      className="h-1.5 w-1.5 rounded-full bg-current"
+                      style={{
+                        animation: 'lino-dot 1s infinite',
+                        animationDelay: '0ms',
+                      }}
+                    />
+                    <span
+                      className="ml-1.5 h-1.5 w-1.5 rounded-full bg-current"
+                      style={{
+                        animation: 'lino-dot 1s infinite',
+                        animationDelay: '150ms',
+                      }}
+                    />
+                    <span
+                      className="ml-1.5 h-1.5 w-1.5 rounded-full bg-current"
+                      style={{
+                        animation: 'lino-dot 1s infinite',
+                        animationDelay: '300ms',
+                      }}
+                    />
+                    <style jsx>{`
+                      @keyframes lino-dot {
+                        0%,
+                        80%,
+                        100% {
+                          transform: translateY(0);
+                          opacity: 0.4;
+                        }
+                        40% {
+                          transform: translateY(-4px);
+                          opacity: 1;
+                        }
+                      }
+                    `}</style>
+                  </span>
+                ) : (
+                  <PlusCircle className="h-7 w-7" />
+                )}
+              </button>
+            </div>
+
+            <Link
+              href="/inbox"
+              aria-current={active === 'inbox' ? 'page' : undefined}
+              className={`flex flex-col items-center justify-center gap-1 rounded-xl py-2 text-[11px] font-medium transition-colors ${
+                active === 'inbox'
+                  ? 'text-zinc-900 dark:text-zinc-50'
+                  : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200'
+              }`}
+              aria-label="읽음"
+            >
+              <BookmarkCheck className="h-5 w-5" />
+              <span>읽음</span>
+            </Link>
+          </div>
         </div>
       </nav>
-
-      <button
-        type="button"
-        onClick={() => void openPreviewFromClipboard()}
-        disabled={saving || previewLoading}
-        aria-label="클립보드 링크 저장"
-        className="fixed z-30 rounded-full bg-zinc-900 p-4 text-white shadow-lg disabled:opacity-60 dark:bg-zinc-50 dark:text-zinc-900"
-        style={{
-          right: '16px',
-          bottom: 'calc(env(safe-area-inset-bottom) + 88px)',
-        }}
-      >
-        {previewLoading ? (
-          <span
-            className="flex h-7 w-7 items-center justify-center"
-            aria-hidden
-          >
-            <span
-              className="h-1.5 w-1.5 rounded-full bg-current"
-              style={{
-                animation: 'lino-dot 1s infinite',
-                animationDelay: '0ms',
-              }}
-            />
-            <span
-              className="ml-1.5 h-1.5 w-1.5 rounded-full bg-current"
-              style={{
-                animation: 'lino-dot 1s infinite',
-                animationDelay: '150ms',
-              }}
-            />
-            <span
-              className="ml-1.5 h-1.5 w-1.5 rounded-full bg-current"
-              style={{
-                animation: 'lino-dot 1s infinite',
-                animationDelay: '300ms',
-              }}
-            />
-            <style jsx>{`
-              @keyframes lino-dot {
-                0%,
-                80%,
-                100% {
-                  transform: translateY(0);
-                  opacity: 0.4;
-                }
-                40% {
-                  transform: translateY(-4px);
-                  opacity: 1;
-                }
-              }
-            `}</style>
-          </span>
-        ) : (
-          <PlusCircle className="h-7 w-7" />
-        )}
-      </button>
     </>
   )
 }

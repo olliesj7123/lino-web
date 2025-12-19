@@ -1,10 +1,19 @@
 'use client'
 
-import { useMemo, useState } from 'react'
-import { Bookmark, Check, Link2, PlusCircle } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import {
+  Bookmark,
+  Check,
+  Copy,
+  Link2,
+  PlusCircle,
+  Share2,
+  Trash2,
+} from 'lucide-react'
 
 import type { Item } from '@/lib/items'
 import { createClient } from '@/utils/supabase/client'
+import { useToast } from '@/app/_components/ToastProvider'
 
 type Props = {
   initialItems: Item[]
@@ -57,6 +66,7 @@ export default function TodayClient({
   initialTotalCount,
   initialHasSeenOnboarding,
 }: Props) {
+  const { toast } = useToast()
   const [items, setItems] = useState<Item[]>(initialItems)
   const [totalCount, setTotalCount] = useState<number>(initialTotalCount)
   const [hasSeenOnboarding, setHasSeenOnboarding] = useState<boolean>(() => {
@@ -72,6 +82,16 @@ export default function TodayClient({
   const supabase = useMemo(() => createClient(), [])
 
   const [justCleared, setJustCleared] = useState(false)
+
+  const [menuOpenForId, setMenuOpenForId] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!menuOpenForId) return
+
+    const onDocClick = () => setMenuOpenForId(null)
+    document.addEventListener('click', onDocClick)
+    return () => document.removeEventListener('click', onDocClick)
+  }, [menuOpenForId])
 
   const dismissOnboarding = async () => {
     localStorage.setItem('lino:has_seen_onboarding', '1')
@@ -120,6 +140,83 @@ export default function TodayClient({
   const openOutlink = (item: Item) => {
     const openUrl = item.canonical_url ?? item.url
     window.open(openUrl, '_blank', 'noopener,noreferrer')
+  }
+
+  const copyLink = async (url: string) => {
+    try {
+      await navigator.clipboard.writeText(url)
+      toast({ title: '링크를 복사했어요' })
+    } catch {
+      toast({
+        title: '링크를 복사할 수 없어요',
+        description: url,
+        actionLabel: '열기',
+        onAction: () => {
+          window.open(url, '_blank', 'noopener,noreferrer')
+        },
+        durationMs: 5000,
+      })
+    }
+  }
+
+  const onCopyLink = async (item: Item) => {
+    setMenuOpenForId(null)
+    const url = item.canonical_url ?? item.url
+    await copyLink(url)
+  }
+
+  const onShare = async (item: Item) => {
+    setMenuOpenForId(null)
+
+    const url = item.canonical_url ?? item.url
+    const title = item.title ?? undefined
+    const text = item.description ?? undefined
+
+    try {
+      if (typeof navigator !== 'undefined' && 'share' in navigator) {
+        await navigator.share({ title, text, url })
+        return
+      }
+      toast({
+        title: '이 환경에서는 공유를 지원하지 않아요',
+        actionLabel: '복사',
+        onAction: () => copyLink(url),
+      })
+      return
+    } catch {
+      toast({
+        title: '공유에 실패했어요',
+        actionLabel: '복사',
+        onAction: () => copyLink(url),
+      })
+    }
+  }
+
+  const deleteItem = async (item: Item) => {
+    const res = await fetch(`/api/items/${item.id}`, { method: 'DELETE' })
+    if (!res.ok) {
+      throw new Error('삭제에 실패했어요')
+    }
+  }
+
+  const requestDelete = (item: Item) => {
+    setMenuOpenForId(null)
+
+    const index = items.findIndex((it) => it.id === item.id)
+    setItems((prev) => prev.filter((it) => it.id !== item.id))
+    setTotalCount((c) => Math.max(0, c - 1))
+
+    void deleteItem(item).catch(() => {
+      setItems((prev) => {
+        const exists = prev.some((it) => it.id === item.id)
+        if (exists) return prev
+        const next = [...prev]
+        next.splice(Math.min(Math.max(index, 0), next.length), 0, item)
+        return next
+      })
+      setTotalCount((c) => c + 1)
+      toast({ title: '삭제에 실패했어요' })
+    })
   }
 
   const requestReadWithUndo = (item: Item) => {
@@ -247,23 +344,82 @@ export default function TodayClient({
                       ) : null}
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        requestReadWithUndo(item)
-                      }}
-                      className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-medium text-white/75 shadow-sm backdrop-blur hover:bg-white/15"
-                    >
-                      <Check className="h-3.5 w-3.5" />
-                      읽음처리
-                    </button>
+                    <div className="absolute left-3 right-3 top-2.5 flex items-start justify-between gap-2">
+                      <div className="inline-flex items-center rounded-full border border-white/35 bg-white/55 px-2 py-0.5 text-[11px] font-semibold text-zinc-900 shadow-sm backdrop-blur-md dark:border-white/10 dark:bg-zinc-950/45 dark:text-zinc-50">
+                        {savedInfo.label}
+                      </div>
+
+                      <div className="relative flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          aria-label="메뉴"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setMenuOpenForId((cur) =>
+                              cur === item.id ? null : item.id
+                            )
+                          }}
+                          className="h-7 w-7 rounded-lg border border-white/35 bg-white/55 text-[12px] font-semibold text-zinc-900 shadow-sm backdrop-blur-md hover:bg-white/70 dark:border-white/10 dark:bg-zinc-950/45 dark:text-zinc-50 dark:hover:bg-zinc-950/60"
+                        >
+                          ⋮
+                        </button>
+
+                        {menuOpenForId === item.id ? (
+                          <div className="absolute right-0 top-9 z-99 w-40 overflow-hidden rounded-xl border border-white/35 bg-white/70 shadow-sm backdrop-blur-md dark:border-white/10 dark:bg-zinc-950/70">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                void onCopyLink(item)
+                              }}
+                              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-zinc-900 hover:bg-white/60 dark:text-zinc-50 dark:hover:bg-zinc-900/60"
+                            >
+                              <Copy className="h-4 w-4" />
+                              링크 복사
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                void onShare(item)
+                              }}
+                              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-zinc-900 hover:bg-white/60 dark:text-zinc-50 dark:hover:bg-zinc-900/60"
+                            >
+                              <Share2 className="h-4 w-4" />
+                              공유
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                requestDelete(item)
+                              }}
+                              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 hover:bg-white/60 dark:text-red-400 dark:hover:bg-zinc-900/60"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                              삭제
+                            </button>
+                          </div>
+                        ) : null}
+
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            requestReadWithUndo(item)
+                          }}
+                          className="inline-flex h-7 items-center gap-1 rounded-lg border border-white/35 bg-white/55 px-2 text-[11px] font-semibold text-zinc-900 shadow-sm backdrop-blur-md hover:bg-white/70 dark:border-white/10 dark:bg-zinc-950/45 dark:text-zinc-50 dark:hover:bg-zinc-950/60"
+                        >
+                          <Check className="h-3 w-3" />
+                          읽음 처리
+                        </button>
+                      </div>
+                    </div>
 
                     <div className="absolute inset-x-0 bottom-0 bg-zinc-900/85 p-4 text-white">
                       <div className="line-clamp-2 flex items-center gap-2 text-sm font-medium leading-5">
-                        <span className="inline-flex items-center rounded-full border border-white/15 bg-white px-2 py-0.5 text-xs font-medium text-black shadow-sm backdrop-blur">
-                          {savedInfo.label}
-                        </span>
                         {title}
                       </div>
 
