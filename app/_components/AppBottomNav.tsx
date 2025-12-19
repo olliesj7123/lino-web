@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
-import { CalendarDays, Inbox, PlusCircle } from 'lucide-react'
+import { usePathname, useRouter } from 'next/navigation'
+import { Bookmark, BookmarkCheck, PlusCircle } from 'lucide-react'
 
 import type { Item } from '@/lib/items'
 import { useToast } from '@/app/_components/ToastProvider'
@@ -30,6 +30,7 @@ type Props = {
 
 export default function AppBottomNav({ active }: Props) {
   const router = useRouter()
+  const pathname = usePathname()
   const { toast } = useToast()
   const [previewOpen, setPreviewOpen] = useState(false)
   const [previewLoading, setPreviewLoading] = useState(false)
@@ -179,7 +180,7 @@ export default function AppBottomNav({ active }: Props) {
     openPreviewFromUrl,
   ])
 
-  const openPreviewFromClipboard = async () => {
+  const openPreviewFromClipboard = useCallback(async () => {
     const text = await readClipboardText()
     if (!text) {
       toast({
@@ -203,7 +204,18 @@ export default function AppBottomNav({ active }: Props) {
     }
 
     await openPreviewFromUrl(extracted)
-  }
+  }, [extractUrlFromText, openPreviewFromUrl, readClipboardText, toast])
+
+  useEffect(() => {
+    const handler = () => {
+      void openPreviewFromClipboard()
+    }
+
+    window.addEventListener('lino:open_save_from_clipboard', handler)
+    return () => {
+      window.removeEventListener('lino:open_save_from_clipboard', handler)
+    }
+  }, [openPreviewFromClipboard])
 
   const confirmPaste = async () => {
     const extracted = extractUrlFromText(pasteInput)
@@ -247,7 +259,10 @@ export default function AppBottomNav({ active }: Props) {
       setPreviewOpen(false)
       setPreview(null)
 
-      router.push('/inbox')
+      if (pathname !== '/today') {
+        router.push('/today')
+      }
+      router.refresh()
     } finally {
       setSaving(false)
     }
@@ -402,64 +417,11 @@ export default function AppBottomNav({ active }: Props) {
                 ? 'text-zinc-900 dark:text-zinc-50'
                 : 'text-zinc-500 dark:text-zinc-400'
             }`}
-            aria-label="오늘 볼 것"
+            aria-label="안읽음"
           >
-            <CalendarDays className="h-5 w-5" />
-            오늘 볼 것
+            <Bookmark className="h-5 w-5" />
+            안읽음
           </Link>
-
-          <button
-            type="button"
-            onClick={() => void openPreviewFromClipboard()}
-            disabled={saving || previewLoading}
-            aria-label="클립보드 링크 저장"
-            className="-translate-y-4 rounded-full bg-zinc-900 p-3 text-white shadow-md disabled:opacity-60 dark:bg-zinc-50 dark:text-zinc-900"
-          >
-            {previewLoading ? (
-              <span
-                className="flex h-8 w-8 items-center justify-center"
-                aria-hidden
-              >
-                <span
-                  className="h-1.5 w-1.5 rounded-full bg-current"
-                  style={{
-                    animation: 'lino-dot 1s infinite',
-                    animationDelay: '0ms',
-                  }}
-                />
-                <span
-                  className="ml-1.5 h-1.5 w-1.5 rounded-full bg-current"
-                  style={{
-                    animation: 'lino-dot 1s infinite',
-                    animationDelay: '150ms',
-                  }}
-                />
-                <span
-                  className="ml-1.5 h-1.5 w-1.5 rounded-full bg-current"
-                  style={{
-                    animation: 'lino-dot 1s infinite',
-                    animationDelay: '300ms',
-                  }}
-                />
-                <style jsx>{`
-                  @keyframes lino-dot {
-                    0%,
-                    80%,
-                    100% {
-                      transform: translateY(0);
-                      opacity: 0.4;
-                    }
-                    40% {
-                      transform: translateY(-4px);
-                      opacity: 1;
-                    }
-                  }
-                `}</style>
-              </span>
-            ) : (
-              <PlusCircle className="h-8 w-8" />
-            )}
-          </button>
 
           <Link
             href="/inbox"
@@ -468,13 +430,70 @@ export default function AppBottomNav({ active }: Props) {
                 ? 'text-zinc-900 dark:text-zinc-50'
                 : 'text-zinc-500 dark:text-zinc-400'
             }`}
-            aria-label="인박스"
+            aria-label="읽음"
           >
-            <Inbox className="h-5 w-5" />
-            인박스
+            <BookmarkCheck className="h-5 w-5" />
+            읽음
           </Link>
         </div>
       </nav>
+
+      <button
+        type="button"
+        onClick={() => void openPreviewFromClipboard()}
+        disabled={saving || previewLoading}
+        aria-label="클립보드 링크 저장"
+        className="fixed z-30 rounded-full bg-zinc-900 p-4 text-white shadow-lg disabled:opacity-60 dark:bg-zinc-50 dark:text-zinc-900"
+        style={{
+          right: '16px',
+          bottom: 'calc(env(safe-area-inset-bottom) + 88px)',
+        }}
+      >
+        {previewLoading ? (
+          <span
+            className="flex h-7 w-7 items-center justify-center"
+            aria-hidden
+          >
+            <span
+              className="h-1.5 w-1.5 rounded-full bg-current"
+              style={{
+                animation: 'lino-dot 1s infinite',
+                animationDelay: '0ms',
+              }}
+            />
+            <span
+              className="ml-1.5 h-1.5 w-1.5 rounded-full bg-current"
+              style={{
+                animation: 'lino-dot 1s infinite',
+                animationDelay: '150ms',
+              }}
+            />
+            <span
+              className="ml-1.5 h-1.5 w-1.5 rounded-full bg-current"
+              style={{
+                animation: 'lino-dot 1s infinite',
+                animationDelay: '300ms',
+              }}
+            />
+            <style jsx>{`
+              @keyframes lino-dot {
+                0%,
+                80%,
+                100% {
+                  transform: translateY(0);
+                  opacity: 0.4;
+                }
+                40% {
+                  transform: translateY(-4px);
+                  opacity: 1;
+                }
+              }
+            `}</style>
+          </span>
+        ) : (
+          <PlusCircle className="h-7 w-7" />
+        )}
+      </button>
     </>
   )
 }

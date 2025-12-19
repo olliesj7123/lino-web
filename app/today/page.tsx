@@ -33,18 +33,21 @@ export default async function TodayPage() {
     .order('created_at', { ascending: false })
     .limit(limit)
 
+  const hasSeenOnboarding = Boolean(user.user_metadata?.has_seen_onboarding)
+
   return (
     <div className="flex min-h-dvh justify-center bg-zinc-50 px-4 py-6 dark:bg-black">
       <main className="w-full max-w-md">
         <header className="mb-6">
           <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
-            오늘 볼 것
+            안읽음
           </h1>
         </header>
 
         <TodayClient
           initialItems={(items ?? []) as Item[]}
           initialTotalCount={totalCount ?? 0}
+          initialHasSeenOnboarding={hasSeenOnboarding}
         />
 
         <AppBottomNav active="today" />

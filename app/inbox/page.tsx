@@ -15,18 +15,13 @@ export default async function InboxPage() {
 
   const status = 'inbox'
 
-  const { count: totalCount } = await supabase
-    .from('items')
-    .select('id', { count: 'exact', head: true })
-    .eq('user_id', user?.id ?? '')
-    .eq('status', status)
-
   const limit = 10
   const { data: items } = await supabase
     .from('items')
     .select('*')
     .eq('user_id', user?.id ?? '')
     .eq('status', status)
+    .not('read_at', 'is', null)
     .order('created_at', { ascending: false })
     .limit(limit)
 
@@ -36,7 +31,7 @@ export default async function InboxPage() {
         <header className="mb-6">
           <div className="flex items-center justify-between">
             <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
-              인박스
+              읽음
             </h1>
 
             <Link
@@ -49,10 +44,7 @@ export default async function InboxPage() {
           </div>
         </header>
 
-        <InboxClient
-          initialItems={(items ?? []) as Item[]}
-          initialTotalCount={totalCount ?? 0}
-        />
+        <InboxClient initialItems={(items ?? []) as Item[]} />
 
         <AppBottomNav active="inbox" />
       </main>

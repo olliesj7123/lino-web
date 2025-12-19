@@ -8,20 +8,12 @@ import { useToast } from '@/app/_components/ToastProvider'
 
 type Props = {
   initialItems: Item[]
-  initialTotalCount: number
 }
 
-export default function InboxClient({
-  initialItems,
-  initialTotalCount,
-}: Props) {
+export default function InboxClient({ initialItems }: Props) {
   const { toast } = useToast()
   const [error, setError] = useState<string | null>(null)
   const [items, setItems] = useState<Item[]>(initialItems)
-  const [totalCount, setTotalCount] = useState<number>(initialTotalCount)
-  const [typeFilter, setTypeFilter] = useState<
-    'all' | 'video' | 'article' | 'site'
-  >('all')
 
   const [menuOpenForId, setMenuOpenForId] = useState<string | null>(null)
 
@@ -42,13 +34,6 @@ export default function InboxClient({
     return '기타'
   }
 
-  const filteredItems =
-    typeFilter === 'all'
-      ? items
-      : items.filter(
-          (it) => (it.content_type ?? '').toLowerCase() === typeFilter
-        )
-
   const patchReadAt = async (item: Item, readAt: string | null) => {
     const res = await fetch(`/api/items/${item.id}`, {
       method: 'PATCH',
@@ -67,18 +52,35 @@ export default function InboxClient({
 
     const nextReadAt = item.read_at ? null : new Date().toISOString()
 
-    setItems((prev) =>
-      prev.map((it) =>
-        it.id === item.id ? { ...it, read_at: nextReadAt } : it
-      )
-    )
+    // This page is the "읽음" tab. If toggling to unread, remove from list.
+    const index = items.findIndex((it) => it.id === item.id)
 
-    void patchReadAt(item, nextReadAt).catch(() => {
+    if (!nextReadAt) {
+      setItems((prev) => prev.filter((it) => it.id !== item.id))
+    } else {
       setItems((prev) =>
         prev.map((it) =>
-          it.id === item.id ? { ...it, read_at: item.read_at } : it
+          it.id === item.id ? { ...it, read_at: nextReadAt } : it
         )
       )
+    }
+
+    void patchReadAt(item, nextReadAt).catch(() => {
+      if (!nextReadAt) {
+        setItems((prev) => {
+          const exists = prev.some((it) => it.id === item.id)
+          if (exists) return prev
+          const next = [...prev]
+          next.splice(Math.min(Math.max(index, 0), next.length), 0, item)
+          return next
+        })
+      } else {
+        setItems((prev) =>
+          prev.map((it) =>
+            it.id === item.id ? { ...it, read_at: item.read_at } : it
+          )
+        )
+      }
       setError('읽음 상태 변경에 실패했어요')
     })
   }
@@ -94,7 +96,6 @@ export default function InboxClient({
           next.splice(Math.min(Math.max(index, 0), next.length), 0, item)
           return next.slice(0, maxItems)
         })
-        setTotalCount((c) => c + 1)
         setError('삭제에 실패했어요')
       }
     } catch {
@@ -105,7 +106,6 @@ export default function InboxClient({
         next.splice(Math.min(Math.max(index, 0), next.length), 0, item)
         return next.slice(0, maxItems)
       })
-      setTotalCount((c) => c + 1)
       setError('삭제에 실패했어요')
     }
   }
@@ -122,7 +122,6 @@ export default function InboxClient({
 
     const index = items.findIndex((it) => it.id === item.id)
     setItems((prev) => prev.filter((it) => it.id !== item.id))
-    setTotalCount((c) => Math.max(0, c - 1))
 
     const timeoutId = setTimeout(() => {
       setPendingDelete((cur) => {
@@ -149,7 +148,6 @@ export default function InboxClient({
       )
       return next
     })
-    setTotalCount((c) => c + 1)
     setPendingDelete(null)
   }
 
@@ -159,12 +157,14 @@ export default function InboxClient({
       const item = ev.detail?.item as Item | undefined
       if (!item?.id) return
 
+      // This page only lists read items
+      if (!item.read_at) return
+
       setItems((prev) => {
         if (prev.some((it) => it.id === item.id)) return prev
         const next = [item, ...prev]
         return next.slice(0, maxItems)
       })
-      setTotalCount((c) => c + 1)
     }
 
     window.addEventListener('lino:item_saved', handler as EventListener)
@@ -232,60 +232,8 @@ export default function InboxClient({
         </div>
       ) : null}
 
-      <div className="-mx-4 overflow-x-auto px-4">
-        <div className="flex w-max gap-2">
-          <button
-            type="button"
-            onClick={() => setTypeFilter('all')}
-            className={`h-9 rounded-full border px-3 text-sm font-medium ${
-              typeFilter === 'all'
-                ? 'border-zinc-900 bg-zinc-900 text-white dark:border-zinc-50 dark:bg-zinc-50 dark:text-zinc-900'
-                : 'border-zinc-200 bg-white text-zinc-900 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-50'
-            }`}
-          >
-            전체 ({totalCount})
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setTypeFilter('video')}
-            className={`h-9 rounded-full border px-3 text-sm font-medium ${
-              typeFilter === 'video'
-                ? 'border-zinc-900 bg-zinc-900 text-white dark:border-zinc-50 dark:bg-zinc-50 dark:text-zinc-900'
-                : 'border-zinc-200 bg-white text-zinc-900 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-50'
-            }`}
-          >
-            영상
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setTypeFilter('article')}
-            className={`h-9 rounded-full border px-3 text-sm font-medium ${
-              typeFilter === 'article'
-                ? 'border-zinc-900 bg-zinc-900 text-white dark:border-zinc-50 dark:bg-zinc-50 dark:text-zinc-900'
-                : 'border-zinc-200 bg-white text-zinc-900 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-50'
-            }`}
-          >
-            아티클
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setTypeFilter('site')}
-            className={`h-9 rounded-full border px-3 text-sm font-medium ${
-              typeFilter === 'site'
-                ? 'border-zinc-900 bg-zinc-900 text-white dark:border-zinc-50 dark:bg-zinc-50 dark:text-zinc-900'
-                : 'border-zinc-200 bg-white text-zinc-900 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-50'
-            }`}
-          >
-            사이트
-          </button>
-        </div>
-      </div>
-
       <div className="space-y-3">
-        {filteredItems.map((item) => {
+        {items.map((item) => {
           const openUrl = item.canonical_url ?? item.url
           const title = item.title ?? item.url
           const source = item.source_key ?? item.domain ?? ''
@@ -368,7 +316,7 @@ export default function InboxClient({
                   </button>
 
                   {menuOpenForId === item.id ? (
-                    <div className="absolute right-0 top-10 z-10 w-40 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+                    <div className="absolute right-0 top-10 z-99 w-40 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
                       <button
                         type="button"
                         onClick={(e) => {
@@ -389,24 +337,24 @@ export default function InboxClient({
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation()
-                          void onShare(item)
-                        }}
-                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-zinc-900 hover:bg-zinc-50 dark:text-zinc-50 dark:hover:bg-zinc-900"
-                      >
-                        <Share2 className="h-4 w-4" />
-                        공유
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation()
                           void onCopyLink(item)
                         }}
                         className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-zinc-900 hover:bg-zinc-50 dark:text-zinc-50 dark:hover:bg-zinc-900"
                       >
                         <Copy className="h-4 w-4" />
                         링크 복사
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          void onShare(item)
+                        }}
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-zinc-900 hover:bg-zinc-50 dark:text-zinc-50 dark:hover:bg-zinc-900"
+                      >
+                        <Share2 className="h-4 w-4" />
+                        공유
                       </button>
 
                       <button
@@ -428,11 +376,9 @@ export default function InboxClient({
           )
         })}
 
-        {filteredItems.length === 0 ? (
+        {items.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-zinc-200 bg-white p-6 text-center text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-400">
-            {typeFilter === 'all'
-              ? '아직 저장된 링크가 없어요.'
-              : '해당 필터에 해당하는 항목이 없어요.'}
+            읽은 링크가 없어요.
           </div>
         ) : null}
       </div>
